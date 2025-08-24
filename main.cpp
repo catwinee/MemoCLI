@@ -1,6 +1,10 @@
+#include <chrono>
+#include <ctime>
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
+#include <random>
+#include <sstream>
 #include <string>
 
 using json = nlohmann::json;
@@ -41,33 +45,50 @@ int main(int argc, char *argv[]) {
 }
 
 void addEntry(const std::string &content) {
-  json journalData;
-  std::ifstream inputFile("journal.json");
-  if (inputFile.is_open()) {
-    try {
-      inputFile >> journalData;
-    } catch (const std::exception &e) {
-      journalData = json::array();
+  auto now = std::chrono::system_clock::now();
+  std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
+
+  char timeBuffer[80];
+  std::strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S",
+                std::localtime(&currentTime));
+  std::string timestampStr(timeBuffer);
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> dis(100, 999);
+  int randomNum = dis(gen);
+
+  std::stringstream idStream;
+  idStream << currentTime << "-" << randomNum;
+  std::string idStr = idStream.str();
+
+  json newEntry = {
+      {"id", idStr}, {"timestamp", timestampStr}, {"content", content}};
+
+  std::vector<json> entries;
+  std::ifstream inFile("journal.json");
+  if (inFile.is_open()) {
+    json existingData;
+    inFile >> existingData;
+    inFile.close();
+
+    if (existingData.is_array()) {
+      entries = existingData.get<std::vector<json>>();
     }
-    inputFile.close();
-  } else {
-    journalData = json::array();
   }
-  json newEntry = {{"content", content}};
-  journalData.push_back(newEntry);
-  std::ofstream outputFile("journal.json");
-  if (outputFile.is_open()) {
-    outputFile << journalData.dump(2);
-    outputFile.close();
-    std::cout << "Entry added successfully." << std::endl;
-  } else {
-    std::cerr << "Error: Unable to open journal file." << std::endl;
-  }
+
+  entries.push_back(newEntry);
+
+  std::ofstream outFile("journal.json");
+  outFile << json(entries).dump(2);
+  outFile.close();
+
+  std::cout << "Entry added with ID: " << idStr << std::endl;
 }
 
 void listEntries() {
   std::ifstream inputFile("journal.json");
-  
+
   if (!inputFile.is_open()) {
     std::cout << "No journal entries found." << std::endl;
     return;
@@ -83,19 +104,20 @@ void listEntries() {
     std::cout << "Journal Entries:" << std::endl;
     std::cout << "================\n" << std::endl;
     for (size_t i = 0; i < journalData.size(); ++i) {
-      const auto& entry = journalData[i];
+      const auto &entry = journalData[i];
       std::cout << "Entry #" << (i + 1) << ":" << std::endl;
-      
+
       if (entry.contains("content") && entry["content"].is_string()) {
-        std::cout << "  Content: " << entry["content"].get<std::string>() << std::endl;
+        std::cout << "  Content: " << entry["content"].get<std::string>()
+                  << std::endl;
       } else {
         std::cout << "  Content: (Invalid format)" << std::endl;
       }
-      
+
       std::cout << std::endl;
     }
     std::cout << "Total entries: " << journalData.size() << std::endl;
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     std::cerr << "Error reading journal file: " << e.what() << std::endl;
     std::cout << "No valid journal entries found." << std::endl;
   }
@@ -104,6 +126,6 @@ void listEntries() {
 void showUsage(const std::string &appName) {
   std::cerr << "Usage: " << appName << " <command> [arguments]" << std::endl;
   std::cerr << "Commands:" << std::endl;
-  std::cerr << "  add \"<content>\"    Add a new journal entry." << std::endl;
+  std::cerr << "  add <content>    Add a new journal entry." << std::endl;
   std::cerr << "  list             List all journal entries." << std::endl;
 }
