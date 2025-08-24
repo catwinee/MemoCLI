@@ -2,6 +2,9 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
 
 void addEntry(const std::string &content);
 void showUsage(const std::string &appName);
@@ -30,10 +33,26 @@ int main(int argc, char *argv[]) {
 }
 
 void addEntry(const std::string &content) {
-  std::ofstream journalFile("memos.txt", std::ios::app);
-  if (journalFile.is_open()) {
-    journalFile << content << std::endl;
-    journalFile.close();
+  json journalData;
+  std::ifstream inputFile("journal.json");
+  if (inputFile.is_open()) {
+    try {
+      inputFile >> journalData;
+    } catch (const std::exception& e) {
+      journalData = json::array();
+    }
+    inputFile.close();
+  } else {
+    journalData = json::array();
+  }
+  json newEntry = {
+    {"content", content}
+  };
+  journalData.push_back(newEntry);
+  std::ofstream outputFile("journal.json");
+  if (outputFile.is_open()) {
+    outputFile << journalData.dump(2);
+    outputFile.close();
     std::cout << "Entry added successfully." << std::endl;
   } else {
     std::cerr << "Error: Unable to open journal file." << std::endl;
